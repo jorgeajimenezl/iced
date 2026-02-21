@@ -301,6 +301,8 @@ where
                                 scale_factor,
                                 monitor,
                                 on_open,
+                                parent,
+                                parent_window: _parent_window,
                             } => {
                                 let exit_on_close_request = settings.exit_on_close_request;
 
@@ -309,14 +311,44 @@ where
                                 #[cfg(target_arch = "wasm32")]
                                 let target = settings.platform_specific.target.clone();
 
-                                let window_attributes = conversion::window_attributes(
-                                    settings,
-                                    &title,
-                                    scale_factor,
-                                    monitor.or(event_loop.primary_monitor()),
-                                    self.id.clone(),
-                                )
-                                .with_visible(false);
+                                #[allow(unused_mut)]
+                                let mut window_attributes =
+                                    conversion::window_attributes(
+                                        settings,
+                                        &title,
+                                        scale_factor,
+                                        monitor
+                                            .or(event_loop.primary_monitor()),
+                                        self.id.clone(),
+                                    )
+                                    .with_visible(false);
+
+                                // Set parent/owner window on Windows
+                                #[cfg(target_os = "windows")]
+                                if let Some(ref parent_win) = _parent_window {
+                                    use crate::runtime::window::raw_window_handle::{
+                                        HasWindowHandle, RawWindowHandle,
+                                    };
+                                    use winit::platform::windows::WindowAttributesExtWindows;
+
+                                    if let Ok(handle) = parent_win.window_handle() {
+                                        if let RawWindowHandle::Win32(win32) = handle.as_raw() {
+                                            window_attributes = window_attributes
+                                                .with_owner_window(win32.hwnd.get() as isize);
+                                        }
+                                    }
+                                }
+
+                                // Set parent window on macOS
+                                #[cfg(target_os = "macos")]
+                                if let Some(ref parent_win) = _parent_window {
+                                    use crate::runtime::window::raw_window_handle::HasWindowHandle;
+
+                                    if let Ok(handle) = parent_win.window_handle() {
+                                        window_attributes = window_attributes
+                                            .with_parent_window(Some(handle.as_raw()));
+                                    }
+                                }
 
                                 #[cfg(target_arch = "wasm32")]
                                 let window_attributes = {
@@ -389,6 +421,7 @@ where
                                         exit_on_close_request,
                                         make_visible: visible,
                                         on_open,
+                                        parent,
                                     },
                                 );
                             }
@@ -447,6 +480,7 @@ enum Event<Message: 'static> {
         exit_on_close_request: bool,
         make_visible: bool,
         on_open: oneshot::Sender<window::Id>,
+        parent: Option<window::Id>,
     },
     EventLoopAwakened(winit::event::Event<Message>),
     Exit,
@@ -464,6 +498,8 @@ enum Control {
         monitor: Option<winit::monitor::MonitorHandle>,
         on_open: oneshot::Sender<window::Id>,
         scale_factor: f32,
+        parent: Option<window::Id>,
+        parent_window: Option<Arc<winit::window::Window>>,
     },
     SetAutomaticWindowTabbing(bool),
 }
@@ -552,6 +588,7 @@ async fn run_instance<P>(
                 exit_on_close_request,
                 make_visible,
                 on_open,
+                parent: _parent,
             } => {
                 if compositor.is_none() {
                     let (compositor_sender, compositor_receiver) = oneshot::channel();
@@ -627,6 +664,38 @@ async fn run_instance<P>(
                 }
 
                 let is_first = window_manager.is_empty();
+
+                // Set xdg_toplevel parent on Wayland
+                #[cfg(all(feature = "wayland", target_os = "linux"))]
+                if let Some(parent_id) = _parent {
+                    use winit::platform::wayland::WindowExtWayland;
+
+                    if let (Some(child_toplevel), Some(parent_window)) =
+                        (window.xdg_toplevel(), window_manager.get(parent_id))
+                    {
+                        if let Some(parent_toplevel) =
+                            parent_window.raw.xdg_toplevel()
+                        {
+                            #[allow(unsafe_code)]
+                            unsafe {
+                                use wayland_sys::common::wl_argument;
+
+                                let mut args = [wl_argument {
+                                    o: parent_toplevel.as_ptr(),
+                                }];
+                                wayland_sys::ffi_dispatch!(
+                                    wayland_sys::client::wayland_client_handle(),
+                                    wl_proxy_marshal_array,
+                                    child_toplevel.as_ptr()
+                                        as *mut wayland_sys::client::wl_proxy,
+                                    1u32, // XDG_TOPLEVEL_SET_PARENT opcode
+                                    args.as_mut_ptr()
+                                );
+                            }
+                        }
+                    }
+                }
+
                 let window = window_manager.insert(
                     id,
                     window,
@@ -1310,6 +1379,12 @@ fn run_action<'a, P, C>(
         Action::Window(action) => match action {
             window::Action::Open(id, settings, channel) => {
                 let monitor = window_manager.last_monitor();
+                let parent = settings.parent;
+                let parent_window = parent.and_then(|parent_id| {
+                    window_manager
+                        .get(parent_id)
+                        .map(|w| w.raw.clone())
+                });
 
                 control_sender
                     .start_send(Control::CreateWindow {
@@ -1319,6 +1394,8 @@ fn run_action<'a, P, C>(
                         scale_factor: program.scale_factor(id),
                         monitor,
                         on_open: channel,
+                        parent,
+                        parent_window,
                     })
                     .expect("Send control action");
 

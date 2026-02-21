@@ -2511,6 +2511,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tracing",
  "wasm-bindgen-futures",
+ "wayland-sys",
  "web-sys",
  "winit",
 ]
