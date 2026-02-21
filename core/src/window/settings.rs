@@ -98,6 +98,14 @@ pub struct Settings {
     ///
     /// By default this is enabled.
     pub exit_on_close_request: bool,
+
+    /// The parent window.
+    ///
+    /// On Wayland, this sets the xdg_toplevel parent so the child window
+    /// is stacked above the parent.
+    ///
+    /// Currently only supported on Wayland. Ignored on other platforms.
+    pub parent: Option<crate::window::Id>,
 }
 
 impl Default for Settings {
@@ -120,6 +128,7 @@ impl Default for Settings {
             icon: None,
             exit_on_close_request: true,
             platform_specific: PlatformSpecific::default(),
+            parent: None,
         }
     }
 }

@@ -231,6 +231,7 @@ unicode-segmentation = "1.0"
 url = "2.5"
 wasm-bindgen-futures = "0.4"
 wasmtimer = "0.4.2"
+wayland-sys = { version = "0.31", default-features = false }
 web-sys = "0.3.69"
 web-time = "1.1"
 wgpu = { version = "27.0", default-features = false, features = ["std", "wgsl"] }

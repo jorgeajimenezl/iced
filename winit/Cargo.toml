@@ -20,7 +20,7 @@ sysinfo = ["dep:sysinfo"]
 unconditional-rendering = []
 linux-theme-detection = ["dep:mundy", "mundy/async-io", "mundy/color-scheme"]
 x11 = ["winit/x11", "window_clipboard/x11"]
-wayland = ["winit/wayland", "winit/wayland-dlopen", "winit/wayland-csd-adwaita", "window_clipboard/wayland"]
+wayland = ["winit/wayland", "winit/wayland-dlopen", "winit/wayland-csd-adwaita", "window_clipboard/wayland", "dep:wayland-sys"]
 
 [dependencies]
 iced_debug.workspace = true
@@ -44,3 +44,6 @@ wasm-bindgen-futures.workspace = true
 [target.'cfg(target_os = "linux")'.dependencies]
 mundy.workspace = true
 mundy.optional = true
+wayland-sys.workspace = true
+wayland-sys.features = ["client", "dlopen"]
+wayland-sys.optional = true
