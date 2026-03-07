@@ -343,18 +343,7 @@ where
                                         }
                                     }
                                 }
-
-                                // Set parent window on macOS
-                                #[cfg(target_os = "macos")]
-                                if let Some(ref parent_win) = _parent_window {
-                                    use crate::runtime::window::raw_window_handle::HasWindowHandle;
-
-                                    if let Ok(handle) = parent_win.window_handle() {
-                                        window_attributes = window_attributes
-                                            .with_parent_window(Some(handle.as_raw()));
-                                    }
-                                }
-
+                                
                                 #[cfg(target_arch = "wasm32")]
                                 let window_attributes = {
                                     use winit::platform::web::WindowAttributesExtWebSys;
