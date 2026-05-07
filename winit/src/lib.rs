@@ -989,6 +989,11 @@ async fn run_instance<P>(
 
                                     window.raw.request_redraw();
                                 }
+                                compositor::SurfaceError::Occluded => {
+                                    present_span.finish();
+
+                                    // Do nothing and wait for window to become visible again
+                                }
                                 _ => {
                                     present_span.finish();
 
@@ -1023,7 +1028,8 @@ async fn run_instance<P>(
                         };
 
                         match window_event {
-                            winit::event::WindowEvent::Resized(_) => {
+                            winit::event::WindowEvent::Resized(_)
+                            | winit::event::WindowEvent::Occluded(false) => {
                                 window.raw.request_redraw();
                             }
                             winit::event::WindowEvent::ThemeChanged(theme) => {
@@ -1136,9 +1142,7 @@ async fn run_instance<P>(
                                 }
                             }
 
-                            for (event, status) in
-                                window_events.into_iter().zip(statuses.into_iter())
-                            {
+                            for (event, status) in window_events.into_iter().zip(statuses) {
                                 runtime.broadcast(subscription::Event::Interaction {
                                     window: id,
                                     event,
